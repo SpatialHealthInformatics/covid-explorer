@@ -2,7 +2,7 @@
 # COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v5
+# Version:  v23
 #
 # A web app for comparing reported COVID-19 cases and deaths across countries,
 # built on the Johns Hopkins CSSE global time series. It aggregates provinces
@@ -13,6 +13,10 @@
 # How to run locally
 #   pip install -r requirements.txt
 #   streamlit run covid_explorer.py
+#
+# Version note
+#   The number jumps from v4 to v23 so this app, the class app and the write-up
+#   all carry one version number. Nothing was skipped.
 #
 # The app reads the CSV files directly from the CSSE GitHub repository each
 # time the server starts (results are cached for 12 hours), so no local data
@@ -34,7 +38,7 @@ import streamlit as st
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v5"
+VERSION = "v23"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
