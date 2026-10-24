@@ -2,7 +2,7 @@
 # COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v23
+# Version:  v24
 #
 # A web app for comparing reported COVID-19 cases and deaths across countries,
 # built on the Johns Hopkins CSSE global time series. It aggregates provinces
@@ -15,8 +15,14 @@
 #   streamlit run covid_explorer.py
 #
 # Version note
-#   The number jumps from v4 to v23 so this app, the class app and the write-up
+#   The number jumps from v4 to v24 so this app, the class app and the write-up
 #   all carry one version number. Nothing was skipped.
+#
+# Maps
+#   Plotly downloads the base map for every geo figure from its CDN. Where that
+#   download is blocked the maps come up empty while the other charts still
+#   draw. A copy of the outlines ships in static/world_110m.json and Streamlit
+#   serves it, so keep that file and .streamlit/config.toml next to this script.
 #
 # The app reads the CSV files directly from the CSSE GitHub repository each
 # time the server starts (results are cached for 12 hours), so no local data
@@ -38,7 +44,7 @@ import streamlit as st
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v23"
+VERSION = "v24"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
@@ -74,10 +80,15 @@ MAPCFG = {
                                "hoverClosestGeo", "hoverCompareCartesian"],
     "toImageButtonOptions": {"format": "png", "scale": 2, "filename": "covid_map"},
 }
-if (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "static", "world_110m.json"))
-        and os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                        ".streamlit", "config.toml"))):
+# Plotly downloads the base map for every geo figure from its CDN. Where that
+# download is blocked the maps come up empty while the other charts still draw,
+# which is hard to spot. A copy of the outlines ships in static/, and Streamlit
+# serves it (enableStaticServing in .streamlit/config.toml), so the app can
+# supply its own base map. Both files have to sit next to this script.
+MAP_OUTLINES = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "static", "world_110m.json")
+MAPS_SERVED_LOCALLY = os.path.exists(MAP_OUTLINES)
+if MAPS_SERVED_LOCALLY:
     MAPCFG["topojsonURL"] = "app/static/"
 
 PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#6250d6"]
@@ -510,6 +521,10 @@ else:
 
     # ---- Map tab --------------------------------------------------------------
     with tab_map:
+        if not MAPS_SERVED_LOCALLY:
+            st.caption("Map outlines are being fetched from the Plotly CDN. "
+                       "If the map is blank, static/world_110m.json is missing "
+                       "from the folder next to this script.")
         table = summary_table(data, chosen, start, end)
         geo = table.merge(country_info[["lat", "lon"]], left_on="Country",
                           right_index=True, how="left")
