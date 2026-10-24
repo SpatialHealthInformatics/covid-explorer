@@ -1,28 +1,23 @@
 # =============================================================================
-# COVID-19 Surveillance Explorer: daily and cumulative counts by country
-# A Streamlit web app on the Johns Hopkins CSSE COVID-19 time series.
-#
+# COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v1
+# Version:  v5
 #
-# Version log
-#   v1 (2026-10-24): Country selection (up to six, each with a fixed colour),
-#       cases or deaths, daily or cumulative, raw counts or rates per 100,000,
-#       a 7-day average, handling of reporting corrections, one chart or one
-#       panel per country, a bubble map, a world choropleth, spatial statistics
-#       (global Moran's I and LISA clusters, PySAL) and EARS C2 alerts.
+# A web app for comparing reported COVID-19 cases and deaths across countries,
+# built on the Johns Hopkins CSSE global time series. It aggregates provinces
+# to national totals, derives daily counts from running totals, and offers raw
+# or per-100,000 views, a 7-day average, choropleth and bubble maps, global
+# Moran's I with a LISA cluster map (PySAL), and EARS C2 aberration alerts.
 #
-# How to run
+# How to run locally
 #   pip install -r requirements.txt
 #   streamlit run covid_explorer.py
 #
-# Notes
-#   The app reads the CSV files directly from the CSSE GitHub repository each
-#   time the server starts (results are cached for 12 hours), so no local data
-#   files are needed. CSSE stopped updating this repository on March 10, 2023,
-#   so March 9, 2023 is the last date in every series. Data cleaning choices
-#   are explained in the comments below and on the "About the data" tab.
+# The app reads the CSV files directly from the CSSE GitHub repository each
+# time the server starts (results are cached for 12 hours), so no local data
+# files are needed. CSSE stopped updating on March 10, 2023, so March 9, 2023
+# is the last date in every series.
 # =============================================================================
 
 # ---- Clean start -------------------------------------------------------------
@@ -39,7 +34,7 @@ import streamlit as st
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v4"
+VERSION = "v5"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
@@ -64,12 +59,22 @@ NON_COUNTRIES = {"Diamond Princess", "MS Zaandam", "Summer Olympics 2020",
 # shipped in static/ (and static serving is on), use that instead so the maps
 # also work where the CDN is blocked. Either way the app runs.
 import os
-MAPCFG = ({"topojsonURL": "app/static/"}
-          if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                         "static", "world_110m.json"))
-          and os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                          ".streamlit", "config.toml"))
-          else {})
+# Map toolbar: always visible, so the reset button is there after a zoom, with
+# the clutter buttons removed. The topojson line points Plotly at the outline
+# file shipped in static/ when that folder is present.
+MAPCFG = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "scrollZoom": True,
+    "modeBarButtonsToRemove": ["select2d", "lasso2d", "toggleSpikelines",
+                               "hoverClosestGeo", "hoverCompareCartesian"],
+    "toImageButtonOptions": {"format": "png", "scale": 2, "filename": "covid_map"},
+}
+if (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "static", "world_110m.json"))
+        and os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        ".streamlit", "config.toml"))):
+    MAPCFG["topojsonURL"] = "app/static/"
 
 PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#6250d6"]
 MAX_COUNTRIES = len(PALETTE)
@@ -245,6 +250,21 @@ def summary_table(data, countries, start, end):
     return pd.DataFrame(rows)
 
 
+def map_with_reset(fig, name, label="Reset map view"):
+    """Draw a map with a Reset button above it. The button bumps a counter that
+    is part of the chart's key, so Streamlit draws a fresh chart and the view
+    returns to the whole world."""
+    cnt_key = f"_mapreset_{name}"
+    if cnt_key not in st.session_state:
+        st.session_state[cnt_key] = 0
+    _, right = st.columns([5, 1])
+    with right:
+        if st.button(label, key=f"btn_{name}", width="stretch"):
+            st.session_state[cnt_key] += 1
+    st.plotly_chart(fig, width="stretch", config=MAPCFG,
+                    key=f"{name}_{st.session_state[cnt_key]}")
+
+
 def fmt(value, decimals):
     if pd.isna(value):
         return "n/a"
@@ -284,7 +304,7 @@ max_date = data["date"].max().date()
 # Countries the user has added, and the color each one was given when it was
 # first added. Both live in session state so they survive reruns.
 if "countries" not in st.session_state:
-    st.session_state.countries = ["US", "United Kingdom", "Korea, South"]
+    st.session_state.countries = ["US", "United Kingdom", "Korea, South", "Japan"]
 if "colors" not in st.session_state:
     st.session_state.colors = {}
 
@@ -318,7 +338,7 @@ with st.sidebar:
     st.selectbox("Add a country",
                  [c for c in all_countries if c not in st.session_state.countries],
                  index=None, placeholder="Type or pick a country", key="to_add")
-    st.button("Add", width="stretch", on_click=add_country)
+    st.button("Add", width="stretch", on_click=add_country, key="add_country")
     chosen = st.multiselect("Selected countries (click x to remove)",
                             all_countries, key="countries",
                             max_selections=MAX_COUNTRIES)
@@ -508,21 +528,19 @@ else:
                 hovertemplate="<b>%{text}</b><br>" + count_col +
                               ": %{customdata[0]:,.0f}<br>" + size_col +
                               ": %{customdata[1]:,.1f}<extra></extra>"))
+            # An explicit view, so the toolbar's reset button returns to it.
             fig.update_geos(projection_type="natural earth", showcountries=True,
                             countrycolor="#d9d9d4", landcolor="#f3f3ef",
                             oceancolor="#ffffff", showocean=True, coastlinecolor="#d9d9d4",
-                            showframe=False)
+                            showframe=False, lonaxis_range=[-180, 180],
+                            lataxis_range=[-58, 84])
             fig.update_layout(height=520, margin=dict(l=0, r=0, t=40, b=0),
                               paper_bgcolor="white",
                               title=dict(text=f"{measure} per 100,000 people, "
                                               f"{start:%b %d, %Y} to {end:%b %d, %Y} "
                                               "(bubble area)",
                                          font=dict(size=18, color=INK), x=0))
-            # Country outlines are served from the app's own static folder
-            # (static/world_110m.json) instead of Plotly's CDN, so the map
-            # also works where outside scripts are blocked.
-            st.plotly_chart(fig, width="stretch",
-                            config=MAPCFG)
+            map_with_reset(fig, "bubble")
             st.caption("Bubble area is proportional to the rate per 100,000 in the "
                        "selected date window. Colors match the chart.")
 
@@ -566,13 +584,14 @@ else:
                 hoverinfo="skip", showlegend=False))
         fig.update_geos(projection_type="natural earth", showcountries=False,
                         landcolor="#f3f3ef", showocean=True, oceancolor="#ffffff",
-                        coastlinecolor="#d9d9d4", showframe=False, lataxis_range=[-58, 84])
+                        coastlinecolor="#d9d9d4", showframe=False,
+                        lonaxis_range=[-180, 180], lataxis_range=[-58, 84])
         fig.update_layout(height=560, margin=dict(l=0, r=0, t=40, b=0),
                           paper_bgcolor="white",
                           title=dict(text=f"{z_label} in every country, "
                                           f"{start:%b %d, %Y} to {end:%b %d, %Y}",
                                      font=dict(size=18, color=INK), x=0))
-        st.plotly_chart(fig, width="stretch", config=MAPCFG)
+        map_with_reset(fig, "world")
         st.caption("Shading uses one blue scale from light to dark; the darkest step "
                    "starts at the 98th percentile so a few extreme values do not "
                    "flatten the rest. Selected countries are outlined in orange. "
@@ -643,13 +662,13 @@ else:
             fig.update_geos(projection_type="natural earth", showcountries=False,
                             landcolor="#f3f3ef", showocean=True, oceancolor="#ffffff",
                             coastlinecolor="#d9d9d4", showframe=False,
-                            lataxis_range=[-58, 84])
+                            lonaxis_range=[-180, 180], lataxis_range=[-58, 84])
             fig.update_layout(height=460, margin=dict(l=0, r=0, t=40, b=0),
                               paper_bgcolor="white",
                               title=dict(text=f"LISA clusters of {measure.lower()} per "
                                               "100,000 (p < 0.05)",
                                          font=dict(size=16, color=INK), x=0))
-            st.plotly_chart(fig, width="stretch", config=MAPCFG)
+            map_with_reset(fig, "lisa")
             counts = sp["cluster"].value_counts().reindex(order).fillna(0).astype(int)
             st.caption("  ·  ".join(f"{c}: {n}" for c, n in counts.items())
                        + ". Selected countries are outlined in orange.")
@@ -857,7 +876,8 @@ country positions, 999 permutations. **Alerts.** EARS C2 (7-day baseline, 2-day 
 
 **Built with** Python, Streamlit, pandas, Plotly, PySAL (esda, libpysal). Code: `covid_explorer.py` {VERSION}.
 
-**About.** Built by Genie Tang, epidemiologist, as part of a portfolio of spatial health
-informatics work combining surveillance systems, spatial statistics and interactive tools.
-More projects: [spatialhealthinformatics.github.io](https://spatialhealthinformatics.github.io).
+**About the author.** Genie Tang is an epidemiologist and a DrPH student at the Johns
+Hopkins Bloomberg School of Public Health, with a master's in spatial analysis for public
+health. Her work combines surveillance systems, spatial statistics and public health
+informatics. Portfolio: [spatialhealthinformatics.github.io](https://spatialhealthinformatics.github.io).
 """)
