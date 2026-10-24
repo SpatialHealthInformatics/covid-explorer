@@ -2,7 +2,7 @@
 # COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v24
+# Version:  v26
 #
 # A web app for comparing reported COVID-19 cases and deaths across countries,
 # built on the Johns Hopkins CSSE global time series. It aggregates provinces
@@ -15,7 +15,10 @@
 #   streamlit run covid_explorer.py
 #
 # Version note
-#   The number jumps from v4 to v24 so this app, the class app and the write-up
+#   Spatial statistics is the first tab here, so the app opens on the cluster
+#   map. The class copy opens on the chart instead.
+#
+#   The number jumps from v4 to v26 so this app, the class app and the write-up
 #   all carry one version number. Nothing was skipped.
 #
 # Maps
@@ -44,7 +47,7 @@ import streamlit as st
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v24"
+VERSION = "v26"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
@@ -265,19 +268,31 @@ def summary_table(data, countries, start, end):
     return pd.DataFrame(rows)
 
 
-def map_with_reset(fig, name, label="Reset map view"):
-    """Draw a map with a Reset button above it. The button bumps a counter that
-    is part of the chart's key, so Streamlit draws a fresh chart and the view
-    returns to the whole world."""
+def map_with_reset(fig, name, label="\u27f2  Reset map view"):
+    """Draw a map with a Reset button above it and a hint below it.
+
+    Plotly's own toolbar only appears while the pointer is over the figure, and
+    its reset icon is small, so zooming in and not finding the way back is easy.
+    This button is always visible. It bumps a counter that forms part of the
+    chart's key, so Streamlit draws a fresh chart and the view returns to the
+    whole world."""
     cnt_key = f"_mapreset_{name}"
     if cnt_key not in st.session_state:
         st.session_state[cnt_key] = 0
-    _, right = st.columns([5, 1])
+    _, right = st.columns([3, 1.6])
     with right:
-        if st.button(label, key=f"btn_{name}", width="stretch"):
+        if st.button(label, key=f"btn_{name}", width="stretch",
+                     help="Zoom back out to the whole world"):
             st.session_state[cnt_key] += 1
+    # Plotly keeps the zoom and pan a user has set for as long as uirevision
+    # holds the same value, which is what made an earlier Reset button appear
+    # to do nothing. Changing uirevision tells Plotly to discard that state and
+    # fall back to the ranges set on the layout, which is the whole world.
+    fig.update_layout(uirevision=f"{name}-{st.session_state[cnt_key]}")
     st.plotly_chart(fig, width="stretch", config=MAPCFG,
                     key=f"{name}_{st.session_state[cnt_key]}")
+    st.caption("Scroll or drag to zoom and pan. Press Reset map view above to "
+               "return to the whole world.")
 
 
 def fmt(value, decimals):
@@ -396,10 +411,10 @@ st.markdown(
     f"COVID-19 time series (<a href='{REPO_URL}'>GitHub</a>). App {VERSION}.</p>",
     unsafe_allow_html=True)
 
-(tab_chart, tab_map, tab_world, tab_spatial, tab_alerts, tab_table,
+(tab_spatial, tab_chart, tab_map, tab_world, tab_alerts, tab_table,
  tab_help, tab_about) = st.tabs(
-    ["Chart", "Map", "World map", "Spatial statistics", "Alerts",
-     "Summary table", "How to use", "About the data"])
+    ["Spatial Statistics", "Chart", "Map", "World Map", "Alerts",
+     "Summary Table", "User Guide", "About the Data"])
 
 if not chosen:
     tab_chart.info("Add at least one country in the sidebar to see the chart.")
