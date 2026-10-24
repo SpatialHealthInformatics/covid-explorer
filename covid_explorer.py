@@ -2,7 +2,7 @@
 # COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v26
+# Version:  v30
 #
 # A web app for comparing reported COVID-19 cases and deaths across countries,
 # built on the Johns Hopkins CSSE global time series. It aggregates provinces
@@ -18,7 +18,7 @@
 #   Spatial statistics is the first tab here, so the app opens on the cluster
 #   map. The class copy opens on the chart instead.
 #
-#   The number jumps from v4 to v26 so this app, the class app and the write-up
+#   The number jumps from v4 to v30 so this app, the class app and the write-up
 #   all carry one version number. Nothing was skipped.
 #
 # Maps
@@ -47,7 +47,7 @@ import streamlit as st
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v26"
+VERSION = "v30"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
@@ -79,9 +79,25 @@ MAPCFG = {
     "displayModeBar": True,
     "displaylogo": False,
     "scrollZoom": True,
-    "modeBarButtonsToRemove": ["select2d", "lasso2d", "toggleSpikelines",
-                               "hoverClosestGeo", "hoverCompareCartesian"],
+    "modeBarButtons": [["toImage", "zoomInGeo", "zoomOutGeo", "resetGeo"]],
     "toImageButtonOptions": {"format": "png", "scale": 2, "filename": "covid_map"},
+}
+
+# Toolbar for the line charts and the scatterplot. The box-zoom, select and
+# lasso buttons only arm a drag tool, so a click on one looks like nothing
+# happened. They are removed, leaving buttons that act on the click itself.
+# Dragging across a chart still zooms to the box, which is how most people do it.
+CHARTCFG = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "scrollZoom": False,
+    # An explicit list, not a remove-list: only these buttons can appear. Each
+    # acts on the click itself, so nothing on the toolbar looks unresponsive,
+    # and Plotly's "Share chart" button, which uploads the plotted data to an
+    # outside service, cannot come back.
+    "modeBarButtons": [["toImage", "zoomIn2d", "zoomOut2d",
+                        "autoScale2d", "resetScale2d"]],
+    "toImageButtonOptions": {"format": "png", "scale": 2, "filename": "covid_chart"},
 }
 # Plotly downloads the base map for every geo figure from its CDN. Where that
 # download is blocked the maps come up empty while the other charts still draw,
@@ -93,6 +109,12 @@ MAP_OUTLINES = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 MAPS_SERVED_LOCALLY = os.path.exists(MAP_OUTLINES)
 if MAPS_SERVED_LOCALLY:
     MAPCFG["topojsonURL"] = "app/static/"
+
+FONT_STACK = "Century Gothic, CenturyGothic, AppleGothic, Didact Gothic, sans-serif"
+import plotly.io as pio
+pio.templates["appfont"] = go.layout.Template(
+    layout=dict(font=dict(family=FONT_STACK)))
+pio.templates.default = "plotly_white+appfont"
 
 PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#6250d6"]
 MAX_COUNTRIES = len(PALETTE)
@@ -307,6 +329,12 @@ st.set_page_config(page_title="COVID-19 by Country", page_icon="📈", layout="w
 st.markdown(
     """
     <style>
+    /* Century Gothic where it is installed; Didact Gothic, a free look-alike,
+       for everyone else. The same pair the portfolio site uses. */
+    @import url('https://fonts.googleapis.com/css2?family=Didact+Gothic&display=swap');
+    html, body, [class*="st-"], .stApp, button, input, select, textarea {
+        font-family: "Century Gothic", CenturyGothic, AppleGothic, "Didact Gothic", sans-serif;
+    }
     .block-container {padding-top: 2.2rem; padding-bottom: 2rem;}
     .tile {border: 1px solid #e6e6e2; border-radius: 12px; padding: 14px 16px 12px 16px;
            background: #ffffff; height: 100%;}
@@ -316,6 +344,15 @@ st.markdown(
     .tile .big {font-size: 1.9rem; font-weight: 600; color: #1f2933; margin-top: 4px;
                 line-height: 1.1;}
     .tile .sub {font-size: 0.8rem; color: #52514e; margin-top: 6px; line-height: 1.35;}
+    /* Cards in the same style as the portfolio site: a pastel fill, a border
+       a shade deeper, and a 6px edge in the card's own colour. */
+    .stile {border-radius: 10px; padding: 16px 18px 14px 18px; height: 100%;
+            border: 1px solid transparent; border-left-width: 6px;}
+    .stile .name {font-size: 0.95rem; font-weight: 600;}
+    .stile .big {font-size: 1.9rem; font-weight: 600; margin-top: 4px;
+                 line-height: 1.1; color: #14212B;}
+    .stile .sub {font-size: 0.8rem; color: #4B5963; margin-top: 6px;
+                 line-height: 1.35;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -498,7 +535,7 @@ else:
                            tickformat=",.0f" if decimals == 0 else ",.2~f"),
                 font=dict(color=INK),
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHARTCFG)
         else:
             n = len(chosen)
             cols = 2 if n > 1 else 1
@@ -526,7 +563,7 @@ else:
             for ann in fig.layout.annotations:
                 ann.font.size = 14
                 ann.font.color = INK
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=CHARTCFG)
 
         st.caption("Hover for every country's value on a date. Drag on the chart "
                    "to zoom; double-click to reset.")
@@ -657,14 +694,35 @@ else:
                                 right_index=True, how="left").dropna(subset=["iso3"])
         sp, I, p_I, EI = spatial_stats(world_s, k)
 
-        c1, c2_, c3 = st.columns(3)
-        c1.metric("Global Moran's I", f"{I:.3f}",
-                  help="Ranges from about -1 to 1. Positive: similar rates cluster "
-                       "together. Near zero: no spatial pattern.")
-        c2_.metric("Permutation p-value", "< 0.001" if p_I < 0.001 else f"{p_I:.3f}",
-                   help="From 999 random re-assignments of the rates to countries.")
-        c3.metric("Countries in analysis", f"{len(sp)}",
-                  help="Countries with a rate and a map position.")
+        # Same tile styling as the Chart tab, so the two tabs read as one app,
+        # but the numbers are the spatial ones rather than a repeat per country.
+        p_txt = "< 0.001" if p_I < 0.001 else f"{p_I:.3f}"
+        verdict = ("Similar rates sit together" if I > 0.1 and p_I < 0.05
+                   else "No clear spatial pattern")
+        hh = int((sp["cluster"] == "High-High").sum())
+        # Four tinted cards. The fill is the card's own colour at low opacity,
+        # so the row reads as a set and stays distinct from the white per-country
+        # tiles on the Chart tab.
+        # Fill, border and accent are the portfolio site's own card colours.
+        tiles = [
+            ("Global Moran's I", f"{I:.3f}", "#FBE7E6", "#F0CBC8", "#A33E50",
+             f"Expected under no pattern {EI:.3f}<br>{verdict}"),
+            ("Permutation p-value", p_txt, "#E3F2F3", "#C3E0E2", "#16707E",
+             "999 random re-assignments<br>of the rates to countries"),
+            ("High-High countries", f"{hh}", "#FFF7D1", "#F7E08A", "#8C6D00",
+             "High rates whose neighbours<br>also have high rates"),
+            ("Countries in analysis", f"{len(sp)}", "#F1EBF8", "#DACDEC", "#6A4C9C",
+             f"With a rate and a map position<br>{k} nearest neighbours each"),
+        ]
+        for col, (name, big, fill, edge, accent, sub) in zip(st.columns(4), tiles):
+            col.markdown(
+                f"<div class='stile' style='background:{fill}; border-color:{edge}; "
+                f"border-left-color:{accent}'>"
+                f"<div class='name' style='color:{accent}'>{name}</div>"
+                f"<div class='big'>{big}</div>"
+                f"<div class='sub'>{sub}</div></div>",
+                unsafe_allow_html=True)
+        st.write("")
 
         cluster_colors = {"High-High": "#b03030", "Low-Low": "#1f63a8",
                           "High-Low": "#e8a0a0", "Low-High": "#9dc3ea",
@@ -741,7 +799,7 @@ else:
                                yaxis=dict(title="Spatial lag of z (neighbours' mean)",
                                           gridcolor=GRID, zeroline=False),
                                legend=dict(orientation="h", y=-0.25, font=dict(size=11)))
-            st.plotly_chart(fig2, width="stretch")
+            st.plotly_chart(fig2, width="stretch", config=CHARTCFG)
 
         st.caption(
             "Method: rates per 100,000 for the selected date window, log10-transformed "
@@ -811,7 +869,7 @@ else:
         for ann in fig.layout.annotations:
             ann.font.size = 14
             ann.font.color = INK
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config=CHARTCFG)
         st.dataframe(pd.DataFrame(summary_rows), hide_index=True, width="stretch")
         st.caption(
             "Method: EARS C2 (CDC Early Aberration Reporting System). Baseline = the 7 "
