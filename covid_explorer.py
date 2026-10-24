@@ -2,7 +2,7 @@
 # COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v30
+# Version:  v31
 #
 # A web app for comparing reported COVID-19 cases and deaths across countries,
 # built on the Johns Hopkins CSSE global time series. It aggregates provinces
@@ -18,7 +18,7 @@
 #   Spatial statistics is the first tab here, so the app opens on the cluster
 #   map. The class copy opens on the chart instead.
 #
-#   The number jumps from v4 to v30 so this app, the class app and the write-up
+#   The number jumps from v4 to v31 so this app, the class app and the write-up
 #   all carry one version number. Nothing was skipped.
 #
 # Maps
@@ -47,7 +47,7 @@ import streamlit as st
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v30"
+VERSION = "v31"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
@@ -346,7 +346,10 @@ st.markdown(
     .tile .sub {font-size: 0.8rem; color: #52514e; margin-top: 6px; line-height: 1.35;}
     /* Cards in the same style as the portfolio site: a pastel fill, a border
        a shade deeper, and a 6px edge in the card's own colour. */
-    .stile {border-radius: 10px; padding: 16px 18px 14px 18px; height: 100%;
+    /* min-height keeps the four cards level when one line of the caption
+       wraps and the others do not. */
+    .stile {border-radius: 10px; padding: 16px 18px 14px 18px;
+            height: 100%; min-height: 152px; box-sizing: border-box;
             border: 1px solid transparent; border-left-width: 6px;}
     .stile .name {font-size: 0.95rem; font-weight: 600;}
     .stile .big {font-size: 1.9rem; font-weight: 600; margin-top: 4px;
@@ -706,7 +709,7 @@ else:
         # Fill, border and accent are the portfolio site's own card colours.
         tiles = [
             ("Global Moran's I", f"{I:.3f}", "#FBE7E6", "#F0CBC8", "#A33E50",
-             f"Expected under no pattern {EI:.3f}<br>{verdict}"),
+             f"{verdict}<br>Expected {EI:.3f} under no pattern"),
             ("Permutation p-value", p_txt, "#E3F2F3", "#C3E0E2", "#16707E",
              "999 random re-assignments<br>of the rates to countries"),
             ("High-High countries", f"{hh}", "#FFF7D1", "#F7E08A", "#8C6D00",
