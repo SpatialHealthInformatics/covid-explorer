@@ -2,7 +2,7 @@
 # COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v49
+# Version:  v50
 #
 # A web app for comparing reported COVID-19 cases and deaths across countries,
 # built on the Johns Hopkins CSSE global time series. It aggregates provinces
@@ -18,7 +18,7 @@
 #   Spatial statistics is the first tab here, so the app opens on the cluster
 #   map. The class copy opens on the chart instead.
 #
-#   The number jumps from v4 to v49 so this app, the class app and the write-up
+#   The number jumps from v4 to v50 so this app, the class app and the write-up
 #   all carry one version number. Nothing was skipped.
 #
 # Maps
@@ -47,7 +47,7 @@ import streamlit as st
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v49"
+VERSION = "v50"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
@@ -334,6 +334,15 @@ st.markdown(
     @import url('https://fonts.googleapis.com/css2?family=Didact+Gothic&display=swap');
     html, body, [class*="st-"], .stApp, button, input, select, textarea {
         font-family: "Century Gothic", CenturyGothic, AppleGothic, "Didact Gothic", sans-serif;
+    }
+    /* Streamlit draws its own icons (the sidebar collapse arrows, the help dot)
+       with a ligature font. The rule above matches those elements too, which
+       turns the ligature into its literal name, such as
+       keyboard_double_arrow_left. Give the icon elements their font back. */
+    [data-testid="stIconMaterial"], span[data-testid="stIconMaterial"],
+    .material-icons, .material-symbols-rounded, .material-symbols-outlined {
+        font-family: "Material Symbols Rounded", "Material Symbols Outlined",
+                     "Material Icons" !important;
     }
     .block-container {padding-top: 2.2rem; padding-bottom: 2rem;}
     .tile {border: 1px solid #e6e6e2; border-radius: 12px; padding: 14px 16px 12px 16px;
