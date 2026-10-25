@@ -2,7 +2,7 @@
 # COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v48
+# Version:  v49
 #
 # A web app for comparing reported COVID-19 cases and deaths across countries,
 # built on the Johns Hopkins CSSE global time series. It aggregates provinces
@@ -18,7 +18,7 @@
 #   Spatial statistics is the first tab here, so the app opens on the cluster
 #   map. The class copy opens on the chart instead.
 #
-#   The number jumps from v4 to v48 so this app, the class app and the write-up
+#   The number jumps from v4 to v49 so this app, the class app and the write-up
 #   all carry one version number. Nothing was skipped.
 #
 # Maps
@@ -47,7 +47,7 @@ import streamlit as st
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v48"
+VERSION = "v49"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
@@ -970,5 +970,6 @@ country positions, 999 permutations. **Alerts.** EARS C2 (7-day baseline, 2-day 
 
 **Built with** Python, Streamlit, pandas, Plotly, PySAL (esda, libpysal). Code: `covid_explorer.py` {VERSION}.
 
-Genie Tang, research scientist, spatial epidemiologist. Portfolio: [spatialhealthinformatics.github.io](https://spatialhealthinformatics.github.io).
+Genie Tang, research scientist, spatial epidemiologist; doctoral research in public
+health informatics, Johns Hopkins Bloomberg School of Public Health. Portfolio: [spatialhealthinformatics.github.io](https://spatialhealthinformatics.github.io).
 """)
