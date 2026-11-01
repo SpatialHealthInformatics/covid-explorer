@@ -2,7 +2,7 @@
 # COVID-19 Surveillance Explorer (Streamlit web app)
 # Author:   Genie Tang
 # Script:   covid_explorer.py
-# Version:  v50
+# Version:  v51
 #
 # A web app for comparing reported COVID-19 cases and deaths across countries,
 # built on the Johns Hopkins CSSE global time series. It aggregates provinces
@@ -15,6 +15,11 @@
 #   streamlit run covid_explorer.py
 #
 # Version note
+#   v51 (2026-11-01): English / 日本語 switch at the top of the sidebar (i18n.py, which
+#   must sit next to this script). English is the default; add ?lang=ja to the address
+#   to open the Japanese version. The sidebar opens on every page load, and its open and
+#   close arrows are lime green. The class copy is not changed.
+#
 #   Spatial statistics is the first tab here, so the app opens on the cluster
 #   map. The class copy opens on the chart instead.
 #
@@ -44,10 +49,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+import i18n
 from libpysal.weights import KNN
 from esda.moran import Moran, Moran_Local
 
-VERSION = "v50"
+VERSION = "v51"
 
 BASE = ("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/"
         "csse_covid_19_data/")
@@ -110,7 +116,8 @@ MAPS_SERVED_LOCALLY = os.path.exists(MAP_OUTLINES)
 if MAPS_SERVED_LOCALLY:
     MAPCFG["topojsonURL"] = "app/static/"
 
-FONT_STACK = "Century Gothic, CenturyGothic, AppleGothic, Didact Gothic, sans-serif"
+FONT_STACK = ("Century Gothic, CenturyGothic, AppleGothic, Didact Gothic, Hiragino Sans, "
+              "Hiragino Kaku Gothic ProN, Yu Gothic, Meiryo, Noto Sans JP, sans-serif")
 import plotly.io as pio
 pio.templates["appfont"] = go.layout.Template(
     layout=dict(font=dict(family=FONT_STACK)))
@@ -124,7 +131,7 @@ GRID = "#e6e6e2"
 
 
 # ---- Data loading and cleaning ----------------------------------------------
-@st.cache_data(ttl=12 * 60 * 60, show_spinner="Loading CSSE data from GitHub...")
+@st.cache_data(ttl=12 * 60 * 60, show_spinner=False)
 def load_data():
     """Return (long data frame, country table).
 
@@ -231,7 +238,7 @@ def world_window(data, measure, start, end):
     return out.reset_index()
 
 
-@st.cache_data(show_spinner="Running Moran's I and LISA...")
+@st.cache_data(show_spinner=False)
 def spatial_stats(world, k, permutations=999):
     """Global Moran's I and local Moran (LISA) on log10 rate per 100,000.
 
@@ -324,7 +331,35 @@ def fmt(value, decimals):
 
 
 # ---- Page layout -------------------------------------------------------------
-st.set_page_config(page_title="COVID-19 by Country", page_icon="📈", layout="wide")
+i18n.init_language()
+i18n.install()
+st.set_page_config(page_title="COVID-19 by Country", page_icon="📈", layout="wide",
+                   initial_sidebar_state="expanded")
+# Open the sidebar once per page load. Streamlit remembers a closed sidebar in the browser and then
+# ignores initial_sidebar_state, so a visitor who closed it once would land on the main page.
+_OPEN_SIDEBAR = """<script>
+(function () {
+  try {
+    var p = window.parent, d = p.document;
+    if (p.__sidebarOpenedOnce) return;
+    var tries = 0;
+    var t = setInterval(function () {
+      tries++;
+      var btn = d.querySelector('[data-testid="stExpandSidebarButton"]');
+      var sb = d.querySelector('[data-testid="stSidebar"]');
+      if (btn) { btn.click(); p.__sidebarOpenedOnce = true; clearInterval(t); }
+      else if (sb && tries > 6) { p.__sidebarOpenedOnce = true; clearInterval(t); }
+      if (tries > 60) clearInterval(t);
+    }, 250);
+  } catch (e) {}
+})();
+</script>"""
+# st.iframe replaces st.components.v1.html in newer Streamlit; the old call is the fallback.
+if hasattr(st, "iframe"):
+    st.iframe(_OPEN_SIDEBAR, height=1)
+else:
+    import streamlit.components.v1 as components
+    components.html(_OPEN_SIDEBAR, height=0)
 
 st.markdown(
     """
@@ -333,7 +368,8 @@ st.markdown(
        for everyone else. The same pair the portfolio site uses. */
     @import url('https://fonts.googleapis.com/css2?family=Didact+Gothic&display=swap');
     html, body, [class*="st-"], .stApp, button, input, select, textarea {
-        font-family: "Century Gothic", CenturyGothic, AppleGothic, "Didact Gothic", sans-serif;
+        font-family: "Century Gothic", CenturyGothic, AppleGothic, "Didact Gothic", "Hiragino Sans",
+                     "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, "Noto Sans JP", sans-serif;
     }
     /* Streamlit draws its own icons (the sidebar collapse arrows, the help dot)
        with a ligature font. The rule above matches those elements too, which
@@ -343,6 +379,20 @@ st.markdown(
     .material-icons, .material-symbols-rounded, .material-symbols-outlined {
         font-family: "Material Symbols Rounded", "Material Symbols Outlined",
                      "Material Icons" !important;
+    }
+    /* Sidebar open and close arrows: bright pastel lime so they are easy to find */
+    [data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapseButton"] button,
+    [data-testid="stSidebarCollapseButton"] > button {
+        background: #c9f7a5 !important; border: 2px solid #7fd44c !important; border-radius: 10px !important;
+        color: #1f3d0c !important; box-shadow: 0 1px 6px rgba(80, 160, 40, 0.35) !important;
+        min-width: 2.4rem; min-height: 2.4rem;
+    }
+    [data-testid="stExpandSidebarButton"] svg, [data-testid="stSidebarCollapseButton"] svg { color: #1f3d0c !important; fill: #1f3d0c !important; }
+    /* Sidebar stays open on computers and tablets (collapse button hidden).
+       On phones the button stays, so the sidebar can be closed to see the page. */
+    @media (min-width: 768px) {
+        [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"] { display: none !important; }
     }
     .block-container {padding-top: 2.2rem; padding-bottom: 2rem;}
     .tile {border: 1px solid #e6e6e2; border-radius: 12px; padding: 14px 16px 12px 16px;
@@ -371,7 +421,8 @@ st.markdown(
 )
 
 try:
-    data, country_info = load_data()
+    with st.spinner(i18n.T("Loading CSSE data from GitHub...")):
+        data, country_info = load_data()
 except Exception as err:  # network or file-format problem
     st.error(f"Could not load the CSSE data from GitHub: {err}")
     st.stop()
@@ -413,6 +464,7 @@ def add_country():
 
 
 with st.sidebar:
+    i18n.language_switch()
     st.header("Countries")
     st.selectbox("Add a country",
                  [c for c in all_countries if c not in st.session_state.countries],
@@ -703,7 +755,8 @@ else:
         world_s = world_window(data, measure, start, end)
         world_s = world_s.merge(country_info[["iso3", "lat", "lon"]], left_on="country",
                                 right_index=True, how="left").dropna(subset=["iso3"])
-        sp, I, p_I, EI = spatial_stats(world_s, k)
+        with st.spinner(i18n.T("Running Moran's I and LISA...")):
+            sp, I, p_I, EI = spatial_stats(world_s, k)
 
         # Same tile styling as the Chart tab, so the two tabs read as one app,
         # but the numbers are the spatial ones rather than a repeat per country.
